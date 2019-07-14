@@ -20,6 +20,7 @@
 #include <vector>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include "opencv2/imgproc/imgproc.hpp"
 
 #include "platform.h"
 #include "net.h"
@@ -36,31 +37,47 @@ static int detect_squeezenet(const cv::Mat& bgr, std::vector<float>& cls_scores)
     squeezenet.opt.use_vulkan_compute = true;
 #endif // NCNN_VULKAN
 
-    squeezenet.load_param("squeezenet_v1.1.param");
-    squeezenet.load_model("squeezenet_v1.1.bin");
+    squeezenet.load_param("squeezenet-torch.param");
+    squeezenet.load_model("squeezenet-torch.bin");
 
-    ncnn::Mat in = ncnn::Mat::from_pixels_resize(bgr.data, ncnn::Mat::PIXEL_BGR, bgr.cols, bgr.rows, 227, 227);
+    // ncnn::Mat in = ncnn::Mat::from_pixels_resize(bgr.data, ncnn::Mat::PIXEL_BGR, bgr.cols, bgr.rows, 224, 224);
+    ncnn::Mat in = ncnn::Mat::from_pixels(bgr.data, ncnn::Mat::PIXEL_BGR, 224, 224);
 
     const float mean_vals[3] = {104.f, 117.f, 123.f};
-    in.substract_mean_normalize(mean_vals, 0);
+    in.substract_mean_normalize(0, 0);
 
     clock_t begin = clock();
     double elapsed_secs = 0;
     ncnn::Extractor ex = squeezenet.create_extractor();
 
-    ex.input("data", in);
+    ex.input("0", in);
     clock_t insert_inputs = clock();
     elapsed_secs = static_cast<double>(insert_inputs - begin) / CLOCKS_PER_SEC;
     std::cout << "insert_inputs :" << elapsed_secs << " s" << std::endl;
 
     ncnn::Mat out;
-    ex.extract("prob", out);
+    ex.extract("127", out);
 
     clock_t extract_out = clock();
     elapsed_secs = static_cast<double>(extract_out - begin) / CLOCKS_PER_SEC;
     std::cout << "extract_out :" << elapsed_secs << " s" << std::endl;
 
-    cls_scores.resize(out.w);
+    {
+        ncnn::Layer* softmax = ncnn::create_layer("Softmax");
+
+        ncnn::ParamDict pd;
+        softmax->load_param(pd);
+
+        softmax->forward_inplace(out);
+
+        delete softmax;
+    }
+    cls_scores.resize(out.w * out.h * out.c);
+
+    for (int j=0; j<10; j++)
+    {
+        fprintf(stderr, "cv::imread %.3f \n", out[j]);
+    }
     for (int j=0; j<out.w; j++)
     {
         cls_scores[j] = out[j];
@@ -68,6 +85,7 @@ static int detect_squeezenet(const cv::Mat& bgr, std::vector<float>& cls_scores)
     clock_t end = clock();
     elapsed_secs = static_cast<double>(end - begin) / CLOCKS_PER_SEC;
     std::cout << "end :" << elapsed_secs << " s" << std::endl;
+
 
 
     return 0;
@@ -109,6 +127,7 @@ int main(int argc, char** argv)
     const char* imagepath = argv[1];
 
     cv::Mat m = cv::imread(imagepath, 1);
+    cv::resize(m, m, cv::Size(224, 224), 0, 0, cv::INTER_LINEAR);
     if (m.empty())
     {
         fprintf(stderr, "cv::imread %s failed\n", imagepath);

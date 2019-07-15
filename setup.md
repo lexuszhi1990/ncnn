@@ -25,16 +25,15 @@ end :0.141593 s
 
 ### convert pytorch to onnx to ncnn
 
-docker run --rm -it -v /mnt/data-4t/workspace/david/ncnn:/app -w /app pytorch/pytorch:1.0-cuda10.0-cudnn7-runtime bash
+docker run --rm -it -v /mnt/data-4t/workspace/david/ncnn:/app -w /app pytorch/pytorch:1.0-cuda10.0-cudnn7-runtime-centernet bash
 
-apt install python-opencv
-apt-get install -y libsm6 libxext6 libxrender-dev
-pip install opencv-python onnx-simplifier
+or
+
+apt install -y cython libglib2.0-dev libsm6 libxext6 libxrender-dev
+pip install -i https://mirrors.aliyun.com/pypi/simple/ opencv-python onnx onnx-simplifier
 
 python3 -m onnxsim squeezenet.onnx squeezenet-sim.onnx
-
 onnx2ncnn squeezenet-sim.onnx squeezenet-torch.param squeezenet-torch.bin
-
 
 ### benchmark
 
@@ -83,6 +82,13 @@ cpu: ./benchncnn 8 2 0
       mobilenet_yolo  min =  151.86  max =  153.26  avg =  152.53
     mobilenet_yolov3  min =  157.07  max =  157.47  avg =  157.24
 
+### build android
+
+cmake -DCMAKE_TOOLCHAIN_FILE=/mnt/data-4t/Android/SDK/ndk-bundle/build/cmake/android.toolchain.cmake -DANDROID_ABI="armeabi-v7a" -DANDROID_ARM_NEON=ON     -DANDROID_PLATFORM=android-24 -DNCNN_VULKAN=ON  ..
+
+### build android-gpu
+
+export VULKAN_SDK=/mnt/data-4t/workspace/david/vulkansdk_1.1.92.1/x86_64
 
 
 reference
